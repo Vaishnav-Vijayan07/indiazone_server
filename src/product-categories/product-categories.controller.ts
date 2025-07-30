@@ -9,12 +9,15 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { ProductCategoriesService } from './product-categories.service';
 import { CreateProductCategoryDto } from './dto/create-product-category.dto';
 import { UpdateProductCategoryDto } from './dto/update-product-category.dto';
 import { UpdateProductCategoryStatusDto } from './dto/update-product-category-status.dto';
+import { CategoryImageUploadInterceptor } from './interceptors/category-image-upload.interceptor';
 import { CognitoAuthGuard } from '../auth/guards/cognito-auth.guard';
 import { ProductCategoryStatus } from '../database/models/product-category.model';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
@@ -146,6 +149,39 @@ export class ProductCategoriesController {
     @Body() updateProductCategoryStatusDto: UpdateProductCategoryStatusDto,
   ) {
     return this.productCategoriesService.updateStatus(id, updateProductCategoryStatusDto.status);
+  }
+
+  @Patch(':id/image')
+  // @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(CategoryImageUploadInterceptor)
+  @ApiOperation({ summary: 'Upload category image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Category image uploaded successfully' })
+  @ApiResponse({ status: 404, description: 'Product category not found' })
+  @ApiResponse({ status: 400, description: 'Invalid file or upload error' })
+  async uploadCategoryImage(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+
+    // Extract S3 URL from uploaded file
+    const imageUrl = (file as any).location;
+    
+    return this.productCategoriesService.updateCategoryImage(id, imageUrl, 1); // Using 1 as default user ID
+  }
+
+  @Delete(':id/image')
+  // @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove category image' })
+  @ApiResponse({ status: 200, description: 'Category image removed successfully' })
+  @ApiResponse({ status: 404, description: 'Product category not found' })
+  removeCategoryImage(@Param('id', ParseIntPipe) id: number) {
+    return this.productCategoriesService.removeCategoryImage(id, 1); // Using 1 as default user ID
   }
 
   @Post('bulk-status')

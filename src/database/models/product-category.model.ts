@@ -53,6 +53,12 @@ export class ProductCategory extends Model {
   units: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  image_url: string;
+
+  @Column({
     type: DataType.BIGINT,
     defaultValue: ProductCategoryStatus.PENDING,
     validate: {

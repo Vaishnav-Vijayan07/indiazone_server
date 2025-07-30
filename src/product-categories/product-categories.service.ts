@@ -5,12 +5,14 @@ import { Op } from 'sequelize';
 import { ProductCategory, ProductCategoryStatus } from '../database/models/product-category.model';
 import { CreateProductCategoryDto } from './dto/create-product-category.dto';
 import { UpdateProductCategoryDto } from './dto/update-product-category.dto';
+import { FileUploadService } from '../common/services/file-upload.service';
 
 @Injectable()
 export class ProductCategoriesService {
   constructor(
     @InjectModel(ProductCategory)
     private productCategoryModel: typeof ProductCategory,
+    private fileUploadService: FileUploadService,
     private sequelize: Sequelize,
   ) {}
 
@@ -309,6 +311,66 @@ export class ProductCategoriesService {
       
       await transaction.commit();
       return affectedCount;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async updateCategoryImage(id: number, imageUrl: string, updatedBy?: number): Promise<ProductCategory> {
+    const transaction = await this.sequelize.transaction();
+    
+    try {
+      const category = await this.findOne(id);
+      
+      // Delete old image from S3 if it exists
+      if (category.image_url) {
+        try {
+          await this.fileUploadService.deleteFile(category.image_url);
+        } catch (error) {
+          console.warn(`Failed to delete old category image: ${error.message}`);
+          // Continue with update even if old image deletion fails
+        }
+      }
+      
+      // Update category with new image URL
+      await category.update({ 
+        image_url: imageUrl,
+        // Add updated_by if you have audit fields
+      }, { transaction });
+      
+      await transaction.commit();
+      return this.findOne(id);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async removeCategoryImage(id: number, updatedBy?: number): Promise<ProductCategory> {
+    const transaction = await this.sequelize.transaction();
+    
+    try {
+      const category = await this.findOne(id);
+      
+      // Delete image from S3 if it exists
+      if (category.image_url) {
+        try {
+          await this.fileUploadService.deleteFile(category.image_url);
+        } catch (error) {
+          console.warn(`Failed to delete category image: ${error.message}`);
+          // Continue with update even if image deletion fails
+        }
+      }
+      
+      // Remove image URL from category
+      await category.update({ 
+        image_url: null,
+        // Add updated_by if you have audit fields
+      }, { transaction });
+      
+      await transaction.commit();
+      return this.findOne(id);
     } catch (error) {
       await transaction.rollback();
       throw error;
